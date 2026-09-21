@@ -19,7 +19,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   String _tipo = 'gasto';
   DateTime _fecha = DateTime.now();
   List<Categoria> _categorias = [];
-  Categoria? _categoriaSeleccionada;
+  int? _categoriaIdSeleccionada;
   bool _guardando = false;
 
   static const Color teal = Color(0xFF028090);
@@ -32,11 +32,20 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     _cargarCategorias();
   }
 
-  Future<void> _cargarCategorias() async {
-    final categorias = await _db.getCategorias(tipo: _tipo);
+  Future<void> _cargarCategorias({int? seleccionarId}) async {
+    final tipoSolicitado = _tipo;
+    final categorias = await _db.getCategorias(tipo: tipoSolicitado);
+    if (!mounted || tipoSolicitado != _tipo) return;
     setState(() {
       _categorias = categorias;
-      _categoriaSeleccionada = categorias.isNotEmpty ? categorias.first : null;
+      if (seleccionarId != null &&
+          categorias.any((c) => c.id == seleccionarId)) {
+        _categoriaIdSeleccionada = seleccionarId;
+      } else {
+        _categoriaIdSeleccionada = categorias.isNotEmpty
+            ? categorias.first.id
+            : null;
+      }
     });
   }
 
@@ -63,6 +72,61 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         '${_fecha.day.toString().padLeft(2, '0')}';
   }
 
+  void _manejarSeleccionCategoria(int? valor) {
+    setState(() => _categoriaIdSeleccionada = valor);
+  }
+
+  Future<void> _mostrarDialogoNuevaCategoria() async {
+    final controller = TextEditingController();
+    final nombre = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Nueva categoría'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(
+              hintText: 'Ej: Mascotas, Salud, Arriendo...',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, controller.text.trim()),
+              child: const Text('Crear'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (nombre == null || nombre.isEmpty) {
+      controller.dispose();
+      return;
+    }
+
+    try {
+      final nuevaCategoria = Categoria(nombre: nombre, tipo: _tipo);
+      final nuevoId = await _db.insertCategoria(nuevaCategoria);
+      if (!mounted) return;
+      await _cargarCategorias(seleccionarId: nuevoId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Categoría "$nombre" creada y seleccionada')),
+      );
+    } catch (_) {
+      if (mounted) {
+        _mostrarError('No se pudo crear la categoría. Intenta nuevamente.');
+      }
+    } finally {
+      controller.dispose();
+    }
+  }
+
   Future<void> _guardar() async {
     final montoTexto = _montoController.text.trim();
     final monto = double.tryParse(montoTexto);
@@ -71,7 +135,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       _mostrarError('Ingresa un monto válido');
       return;
     }
-    if (_categoriaSeleccionada == null) {
+    if (_categoriaIdSeleccionada == null) {
       _mostrarError('Selecciona una categoría');
       return;
     }
@@ -79,7 +143,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     setState(() => _guardando = true);
 
     final transaccion = Transaccion(
-      categoriaId: _categoriaSeleccionada!.id!,
+      categoriaId: _categoriaIdSeleccionada!,
       monto: monto,
       fecha: _fechaIso,
       descripcion: _descripcionController.text.trim(),
@@ -88,17 +152,22 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       estado: 'confirmado',
     );
 
-    await _db.insertTransaccion(transaccion);
-
-    if (mounted) {
-      Navigator.pop(context, true);
+    try {
+      await _db.insertTransaccion(transaccion);
+      if (mounted) {
+        Navigator.pop(context, true);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _guardando = false);
+        _mostrarError('No se pudo guardar el movimiento. Intenta nuevamente.');
+      }
     }
   }
 
   void _mostrarError(String mensaje) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(mensaje)),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(mensaje)));
   }
 
   @override
@@ -116,18 +185,16 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           children: [
             Row(
               children: [
-                Expanded(
-                  child: _tipoBoton('Gasto', 'gasto', teal),
-                ),
+                Expanded(child: _tipoBoton('Gasto', 'gasto', teal)),
                 const SizedBox(width: 8),
-                Expanded(
-                  child: _tipoBoton('Ingreso', 'ingreso', success),
-                ),
+                Expanded(child: _tipoBoton('Ingreso', 'ingreso', success)),
               ],
             ),
             const SizedBox(height: 20),
-            const Text('Monto',
-                style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const Text(
+              'Monto',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
             TextField(
               controller: _montoController,
               keyboardType: TextInputType.number,
@@ -138,37 +205,61 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            const Text('Categoría',
-                style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const Text(
+              'Categoría',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
             const SizedBox(height: 4),
-            DropdownButtonFormField<Categoria>(
-              value: _categoriaSeleccionada,
-              isExpanded: true,
-              decoration: const InputDecoration(
-                filled: true,
-                fillColor: Color(0xFFF1EFE8),
-                border: OutlineInputBorder(borderSide: BorderSide.none),
-                contentPadding:
-                    EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              ),
-              items: _categorias
-                  .map((c) => DropdownMenuItem(
-                        value: c,
-                        child: Text(c.nombre),
-                      ))
-                  .toList(),
-              onChanged: (c) => setState(() => _categoriaSeleccionada = c),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<int>(
+                    key: ValueKey(_categoriaIdSeleccionada),
+                    initialValue: _categoriaIdSeleccionada,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      filled: true,
+                      fillColor: Color(0xFFF1EFE8),
+                      border: OutlineInputBorder(borderSide: BorderSide.none),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                    ),
+                    items: _categorias
+                        .map(
+                          (c) => DropdownMenuItem<int>(
+                            value: c.id,
+                            child: Text(c.nombre),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: _manejarSeleccionCategoria,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  onPressed: _mostrarDialogoNuevaCategoria,
+                  icon: const Icon(Icons.add_circle, color: teal),
+                  tooltip: 'Agregar nueva categoría',
+                ),
+              ],
             ),
             const SizedBox(height: 16),
-            const Text('Fecha',
-                style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const Text(
+              'Fecha',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
             const SizedBox(height: 4),
             InkWell(
               onTap: _elegirFecha,
               child: Container(
                 width: double.infinity,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF1EFE8),
                   borderRadius: BorderRadius.circular(6),
@@ -177,16 +268,20 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            const Text('Descripción (opcional)',
-                style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const Text(
+              'Descripción (opcional)',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
             TextField(
               controller: _descripcionController,
               decoration: const InputDecoration(
                 filled: true,
                 fillColor: Color(0xFFF1EFE8),
                 border: OutlineInputBorder(borderSide: BorderSide.none),
-                contentPadding:
-                    EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
               ),
             ),
             const SizedBox(height: 24),
@@ -197,14 +292,17 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
               child: _guardando
                   ? const SizedBox(
                       width: 20,
                       height: 20,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white),
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
                     )
                   : const Text('Guardar movimiento'),
             ),

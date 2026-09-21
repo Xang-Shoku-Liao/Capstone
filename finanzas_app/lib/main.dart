@@ -1,7 +1,18 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+
 import 'screens/home_screen.dart';
 
 void main() {
+  // sqflite funciona de forma nativa en Android/iOS/macOS, pero Windows y
+  // Linux necesitan la implementación FFI. Sin esto la primera consulta a la
+  // base de datos queda sin un plugin disponible en escritorio.
+  if (Platform.isWindows || Platform.isLinux) {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  }
   runApp(const FinanzasApp());
 }
 

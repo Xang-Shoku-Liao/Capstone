@@ -21,6 +21,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Transaccion> _ultimosMovimientos = [];
   Map<int, Categoria> _categoriasPorId = {};
   bool _cargando = true;
+  String? _errorCarga;
 
   static const Color darkTeal = Color(0xFF013A40);
   static const Color teal = Color(0xFF028090);
@@ -35,21 +36,30 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _cargarDatos() async {
     setState(() => _cargando = true);
+    try {
+      final categorias = await _db.getCategorias();
+      final ingresos = await _db.getTotalPorTipo('ingreso');
+      final gastos = await _db.getTotalPorTipo('gasto');
+      final gastosPorCat = await _db.getGastosPorCategoria();
+      final ultimos = await _db.getTransacciones(limite: 10);
 
-    final categorias = await _db.getCategorias();
-    final ingresos = await _db.getTotalPorTipo('ingreso');
-    final gastos = await _db.getTotalPorTipo('gasto');
-    final gastosPorCat = await _db.getGastosPorCategoria();
-    final ultimos = await _db.getTransacciones(limite: 10);
-
-    setState(() {
-      _categoriasPorId = {for (final c in categorias) c.id!: c};
-      _ingresos = ingresos;
-      _gastos = gastos;
-      _gastosPorCategoria = gastosPorCat;
-      _ultimosMovimientos = ultimos;
-      _cargando = false;
-    });
+      if (!mounted) return;
+      setState(() {
+        _categoriasPorId = {for (final c in categorias) c.id!: c};
+        _ingresos = ingresos;
+        _gastos = gastos;
+        _gastosPorCategoria = gastosPorCat;
+        _ultimosMovimientos = ultimos;
+        _errorCarga = null;
+        _cargando = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _cargando = false;
+        _errorCarga = 'No se pudieron cargar los datos.';
+      });
+    }
   }
 
   String _fmt(double n) {
@@ -81,6 +91,23 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: const Color(0xFFF2F2F2),
       body: _cargando
           ? const Center(child: CircularProgressIndicator())
+          : _errorCarga != null
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(_errorCarga!),
+                    const SizedBox(height: 12),
+                    ElevatedButton(
+                      onPressed: _cargarDatos,
+                      child: const Text('Reintentar'),
+                    ),
+                  ],
+                ),
+              ),
+            )
           : RefreshIndicator(
               onRefresh: _cargarDatos,
               child: CustomScrollView(
@@ -133,8 +160,10 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Saldo disponible',
-                    style: TextStyle(color: mint, fontSize: 12)),
+                Text(
+                  'Saldo disponible',
+                  style: TextStyle(color: mint, fontSize: 12),
+                ),
                 const SizedBox(height: 4),
                 Text(
                   _fmt(saldo),
@@ -149,17 +178,19 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     _dot(mint),
                     const SizedBox(width: 4),
-                    Text('Ingresos: ${_fmt(_ingresos)}',
-                        style: const TextStyle(
-                            color: Colors.white, fontSize: 12)),
+                    Text(
+                      'Ingresos: ${_fmt(_ingresos)}',
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                    ),
                     const SizedBox(width: 18),
                     _dot(const Color(0xFFFF9E80)),
                     const SizedBox(width: 4),
-                    Text('Gastos: ${_fmt(_gastos)}',
-                        style: const TextStyle(
-                            color: Colors.white, fontSize: 12)),
+                    Text(
+                      'Gastos: ${_fmt(_gastos)}',
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                    ),
                   ],
-                )
+                ),
               ],
             ),
           ),
@@ -182,8 +213,10 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Gastos por categoría',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          const Text(
+            'Gastos por categoría',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: 10),
           Container(
             width: double.infinity,
@@ -197,25 +230,32 @@ class _HomeScreenState extends State<HomeScreen> {
                 ? const Padding(
                     padding: EdgeInsets.symmetric(vertical: 12),
                     child: Center(
-                      child: Text('Aún no hay gastos registrados.',
-                          style: TextStyle(color: Colors.grey, fontSize: 13)),
+                      child: Text(
+                        'Aún no hay gastos registrados.',
+                        style: TextStyle(color: Colors.grey, fontSize: 13),
+                      ),
                     ),
                   )
                 : Column(
                     children: _gastosPorCategoria.entries.map((e) {
-                      final maxVal = _gastosPorCategoria.values
-                          .reduce((a, b) => a > b ? a : b);
+                      final maxVal = _gastosPorCategoria.values.reduce(
+                        (a, b) => a > b ? a : b,
+                      );
                       final frac = maxVal > 0 ? e.value / maxVal : 0.0;
-                      final pct =
-                          _gastos > 0 ? (e.value / _gastos * 100).round() : 0;
+                      final pct = _gastos > 0
+                          ? (e.value / _gastos * 100).round()
+                          : 0;
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 8),
                         child: Row(
                           children: [
                             SizedBox(
-                                width: 78,
-                                child: Text(e.key,
-                                    style: const TextStyle(fontSize: 12))),
+                              width: 78,
+                              child: Text(
+                                e.key,
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ),
                             Expanded(
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(4),
@@ -223,18 +263,24 @@ class _HomeScreenState extends State<HomeScreen> {
                                   value: frac,
                                   minHeight: 8,
                                   backgroundColor: const Color(0xFFE6E6E0),
-                                  valueColor:
-                                      const AlwaysStoppedAnimation(teal),
+                                  valueColor: const AlwaysStoppedAnimation(
+                                    teal,
+                                  ),
                                 ),
                               ),
                             ),
                             const SizedBox(width: 8),
                             SizedBox(
-                                width: 34,
-                                child: Text('$pct%',
-                                    textAlign: TextAlign.right,
-                                    style: const TextStyle(
-                                        fontSize: 11, color: Colors.grey))),
+                              width: 34,
+                              child: Text(
+                                '$pct%',
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                       );
@@ -252,8 +298,10 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Últimos movimientos',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          const Text(
+            'Últimos movimientos',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: 10),
           Container(
             width: double.infinity,
@@ -266,8 +314,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 ? const Padding(
                     padding: EdgeInsets.symmetric(vertical: 24),
                     child: Center(
-                      child: Text('Aún no has agregado movimientos.',
-                          style: TextStyle(color: Colors.grey, fontSize: 13)),
+                      child: Text(
+                        'Aún no has agregado movimientos.',
+                        style: TextStyle(color: Colors.grey, fontSize: 13),
+                      ),
                     ),
                   )
                 : Column(
@@ -276,21 +326,30 @@ class _HomeScreenState extends State<HomeScreen> {
                       final esGasto = t.tipo == 'gasto';
                       return Padding(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 10),
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(cat?.nombre ?? '—',
-                                    style: const TextStyle(
-                                        fontSize: 13.5,
-                                        fontWeight: FontWeight.w600)),
+                                Text(
+                                  cat?.nombre ?? '—',
+                                  style: const TextStyle(
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
                                 if (t.descripcion.isNotEmpty)
-                                  Text(t.descripcion,
-                                      style: const TextStyle(
-                                          fontSize: 11, color: Colors.grey)),
+                                  Text(
+                                    t.descripcion,
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
                               ],
                             ),
                             Text(
