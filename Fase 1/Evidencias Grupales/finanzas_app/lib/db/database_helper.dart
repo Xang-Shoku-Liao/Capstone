@@ -2,8 +2,9 @@ import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../models/categoria.dart';
-import '../models/transaccion.dart';
+import '../models/meta_ahorro.dart';
 import '../models/presupuesto.dart';
+import '../models/transaccion.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._internal();
@@ -23,7 +24,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -64,6 +65,16 @@ class DatabaseHelper {
       )
     ''');
 
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS meta_ahorro (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nombre TEXT NOT NULL,
+        monto_objetivo REAL NOT NULL,
+        monto_actual REAL NOT NULL DEFAULT 0,
+        fecha_creacion TEXT NOT NULL
+      )
+    ''');
+
     // Categorías por defecto, para no partir con la app vacía
     final categoriasIniciales = [
       {'nombre': 'Comida', 'tipo': 'gasto'},
@@ -83,6 +94,17 @@ class DatabaseHelper {
     if (oldVersion < 2) {
       await db.execute('ALTER TABLE transaccion ADD COLUMN institucion TEXT');
       await db.execute('ALTER TABLE transaccion ADD COLUMN hora TEXT');
+    }
+    if (oldVersion < 3) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS meta_ahorro (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          nombre TEXT NOT NULL,
+          monto_objetivo REAL NOT NULL,
+          monto_actual REAL NOT NULL DEFAULT 0,
+          fecha_creacion TEXT NOT NULL
+        )
+      ''');
     }
   }
 
@@ -104,6 +126,28 @@ class DatabaseHelper {
             orderBy: 'nombre',
           );
     return maps.map((m) => Categoria.fromMap(m)).toList();
+  }
+
+  Future<bool> categoriaEstaEnUso(int categoriaId) async {
+    final db = await database;
+    final movimientos = Sqflite.firstIntValue(
+      await db.rawQuery(
+        'SELECT COUNT(*) FROM transaccion WHERE categoria_id = ?',
+        [categoriaId],
+      ),
+    );
+    final presupuestos = Sqflite.firstIntValue(
+      await db.rawQuery(
+        'SELECT COUNT(*) FROM presupuesto WHERE categoria_id = ?',
+        [categoriaId],
+      ),
+    );
+    return (movimientos ?? 0) > 0 || (presupuestos ?? 0) > 0;
+  }
+
+  Future<int> deleteCategoria(int categoriaId) async {
+    final db = await database;
+    return db.delete('categoria', where: 'id = ?', whereArgs: [categoriaId]);
   }
 
   // ---------------- Transaccion ----------------
@@ -217,5 +261,49 @@ class DatabaseHelper {
       whereArgs: [mes],
     );
     return maps.map((m) => Presupuesto.fromMap(m)).toList();
+  }
+
+  Future<int> deletePresupuesto(int id) async {
+    final db = await database;
+    return db.delete('presupuesto', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // ---------------- Metas de ahorro ----------------
+
+  Future<List<MetaAhorro>> getMetasAhorro() async {
+    final db = await database;
+    final maps = await db.query('meta_ahorro', orderBy: 'id DESC');
+    return maps.map((m) => MetaAhorro.fromMap(m)).toList();
+  }
+
+  Future<int> insertMetaAhorro(MetaAhorro meta) async {
+    final db = await database;
+    return db.insert('meta_ahorro', meta.toMap());
+  }
+
+  Future<int> updateMetaAhorro(MetaAhorro meta) async {
+    final db = await database;
+    final valores = meta.toMap()..remove('id');
+    return db.update(
+      'meta_ahorro',
+      valores,
+      where: 'id = ?',
+      whereArgs: [meta.id],
+    );
+  }
+
+  Future<int> deleteMetaAhorro(int id) async {
+    final db = await database;
+    return db.delete('meta_ahorro', where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// Borra datos monetarios de demostración y conserva las categorías.
+  Future<void> reiniciarDatosDePrueba() async {
+    final db = await database;
+    await db.transaction((txn) async {
+      await txn.delete('transaccion');
+      await txn.delete('presupuesto');
+      await txn.delete('meta_ahorro');
+    });
   }
 }

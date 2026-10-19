@@ -26,9 +26,12 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   List<Categoria> _categorias = [];
   bool _cargandoCategorias = true;
 
-  static const _teal = Color(0xFF028090);
-  static const _ingreso = Color(0xFF1D9E75);
-  static const _gasto = Color(0xFFC4472A);
+  static const _teal = Color(0xFF31D9D0);
+  static const _ingreso = Color(0xFF42D392);
+  static const _gasto = Color(0xFFFF8F87);
+  static const _surface = Color(0xFF141F26);
+  static const _text = Color(0xFFF2FFFC);
+  static const _muted = Color(0xFF8EA2A5);
 
   @override
   void initState() {
@@ -180,8 +183,6 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Detalle del movimiento'),
-        backgroundColor: const Color(0xFF013A40),
-        foregroundColor: Colors.white,
         actions: [
           IconButton(
             tooltip: 'Eliminar movimiento',
@@ -196,8 +197,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(16),
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: color.withValues(alpha: 0.28)),
             ),
             child: Column(
               children: [
@@ -218,7 +220,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                 const SizedBox(height: 4),
                 Text(
                   '${_transaccion.estado[0].toUpperCase()}${_transaccion.estado.substring(1)} · $tipoTexto',
-                  style: const TextStyle(color: Colors.grey),
+                  style: const TextStyle(color: _muted),
                 ),
               ],
             ),
@@ -295,19 +297,19 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE1E1DA)),
+        color: _surface,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: const Color(0xFF23343B)),
       ),
       child: ListTile(
         leading: Icon(icono, color: _teal),
         title: Text(
           titulo,
-          style: const TextStyle(fontSize: 12, color: Colors.grey),
+          style: const TextStyle(fontSize: 12, color: _muted),
         ),
         subtitle: Text(
           valor,
-          style: const TextStyle(fontSize: 15, color: Colors.black87),
+          style: const TextStyle(fontSize: 15, color: _text),
         ),
         trailing: accion == null
             ? null

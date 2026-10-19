@@ -5,7 +5,9 @@ import '../models/categoria.dart';
 import '../models/transaccion.dart';
 
 class AddTransactionScreen extends StatefulWidget {
-  const AddTransactionScreen({super.key});
+  const AddTransactionScreen({super.key, this.tipoInicial});
+
+  final String? tipoInicial;
 
   @override
   State<AddTransactionScreen> createState() => _AddTransactionScreenState();
@@ -22,13 +24,18 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   int? _categoriaIdSeleccionada;
   bool _guardando = false;
 
-  static const Color teal = Color(0xFF028090);
-  static const Color seafoam = Color(0xFF00A896);
-  static const Color success = Color(0xFF1D9E75);
+  static const Color teal = Color(0xFF31D9D0);
+  static const Color seafoam = Color(0xFF31D9D0);
+  static const Color success = Color(0xFF42D392);
+  static const Color surface = Color(0xFF141F26);
+  static const Color muted = Color(0xFF8EA2A5);
 
   @override
   void initState() {
     super.initState();
+    if (widget.tipoInicial == 'ingreso') {
+      _tipo = 'ingreso';
+    }
     _cargarCategorias();
   }
 
@@ -104,10 +111,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       },
     );
 
-    if (nombre == null || nombre.isEmpty) {
-      controller.dispose();
-      return;
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => controller.dispose());
+    if (nombre == null || nombre.isEmpty) return;
 
     try {
       final nuevaCategoria = Categoria(nombre: nombre, tipo: _tipo);
@@ -122,8 +127,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       if (mounted) {
         _mostrarError('No se pudo crear la categoría. Intenta nuevamente.');
       }
-    } finally {
-      controller.dispose();
     }
   }
 
@@ -173,11 +176,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Nuevo movimiento'),
-        backgroundColor: const Color(0xFF013A40),
-        foregroundColor: Colors.white,
-      ),
+      appBar: AppBar(title: const Text('Nuevo movimiento')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -191,23 +190,24 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
               ],
             ),
             const SizedBox(height: 20),
-            const Text(
-              'Monto',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-            ),
+            const Text('Monto', style: TextStyle(fontSize: 12, color: muted)),
             TextField(
               controller: _montoController,
               keyboardType: TextInputType.number,
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFFF2FFFC),
+              ),
               decoration: const InputDecoration(
                 prefixText: '\$ ',
-                border: UnderlineInputBorder(),
+                prefixStyle: TextStyle(color: teal, fontSize: 28),
               ),
             ),
             const SizedBox(height: 20),
             const Text(
               'Categoría',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
+              style: TextStyle(fontSize: 12, color: muted),
             ),
             const SizedBox(height: 4),
             Row(
@@ -220,7 +220,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                     isExpanded: true,
                     decoration: const InputDecoration(
                       filled: true,
-                      fillColor: Color(0xFFF1EFE8),
+                      fillColor: surface,
                       border: OutlineInputBorder(borderSide: BorderSide.none),
                       contentPadding: EdgeInsets.symmetric(
                         horizontal: 12,
@@ -247,10 +247,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
               ],
             ),
             const SizedBox(height: 16),
-            const Text(
-              'Fecha',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-            ),
+            const Text('Fecha', style: TextStyle(fontSize: 12, color: muted)),
             const SizedBox(height: 4),
             InkWell(
               onTap: _elegirFecha,
@@ -261,22 +258,25 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                   vertical: 12,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF1EFE8),
-                  borderRadius: BorderRadius.circular(6),
+                  color: surface,
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                child: Text(_fechaIso),
+                child: Text(
+                  _fechaIso,
+                  style: const TextStyle(color: Color(0xFFF2FFFC)),
+                ),
               ),
             ),
             const SizedBox(height: 16),
             const Text(
               'Descripción (opcional)',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
+              style: TextStyle(fontSize: 12, color: muted),
             ),
             TextField(
               controller: _descripcionController,
               decoration: const InputDecoration(
                 filled: true,
-                fillColor: Color(0xFFF1EFE8),
+                fillColor: surface,
                 border: OutlineInputBorder(borderSide: BorderSide.none),
                 contentPadding: EdgeInsets.symmetric(
                   horizontal: 12,
@@ -289,7 +289,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
               onPressed: _guardando ? null : _guardar,
               style: ElevatedButton.styleFrom(
                 backgroundColor: seafoam,
-                foregroundColor: Colors.white,
+                foregroundColor: const Color(0xFF06201E),
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
@@ -317,9 +317,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     return OutlinedButton(
       onPressed: () => _cambiarTipo(valor),
       style: OutlinedButton.styleFrom(
-        backgroundColor: activo ? colorActivo : const Color(0xFFF1EFE8),
-        foregroundColor: activo ? Colors.white : Colors.black87,
-        side: BorderSide(color: activo ? colorActivo : const Color(0xFFE1E1DA)),
+        backgroundColor: activo ? colorActivo : surface,
+        foregroundColor: activo
+            ? const Color(0xFF06201E)
+            : const Color(0xFFF2FFFC),
+        side: BorderSide(color: activo ? colorActivo : const Color(0xFF22333A)),
         padding: const EdgeInsets.symmetric(vertical: 12),
       ),
       child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
